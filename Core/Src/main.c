@@ -76,6 +76,8 @@ volatile unsigned long g_dbg_hrtim_irq_seen = 0;
 volatile unsigned char g_dbg_pwm_outputs_enabled = 0;
 volatile unsigned long g_dbg_hrtim_master_cnt = 0;
 
+uint8_t uart_busy = 0;
+
 extern CAN_HandleTypeDef hcan;
 extern HRTIM_HandleTypeDef hhrtim1;
 
@@ -204,14 +206,17 @@ int main(void)
 			memcpy(&send_data[4], &cap_i, 4);
 			memcpy(&send_data[8], &cap_v, 4);
 			memcpy(&send_data[12], tail, 4);
-			HAL_UART_Transmit(&huart3, send_data, sizeof(send_data), 100);
+			if(!uart_busy){
+				HAL_UART_Transmit_DMA(&huart3, send_data, sizeof(send_data));
+				uart_busy = 1;
+			}
 			
 			//这一行数据侦测，但是是电容组的电压，到24v停止充电，break进入轮询（等待冲刺模式下发）
 			if (RE_V_CAP >= 24.0f)
 			{
 				break;
 			}
-			HAL_Delay(1);
+			//HAL_Delay(1);
 		}
 		
 		//等待can的消息控制
@@ -305,6 +310,13 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart == &huart3)
+	{
+		uart_busy = 0;
+	}
+}
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CAN_RxHeaderTypeDef rx_header;
